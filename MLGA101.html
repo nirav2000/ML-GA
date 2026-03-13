@@ -131,6 +131,94 @@
       margin-right: 4px;
       transform: translateY(1px);
     }
+
+    .explain {
+      margin-top: 10px;
+      border: 1px solid #2d3760;
+      background: #121b33;
+      border-radius: 12px;
+      padding: 10px 12px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .explain h3 {
+      margin: 0 0 6px;
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .explain ul {
+      margin: 6px 0 0;
+      padding-left: 18px;
+    }
+
+    .status {
+      margin-top: 8px;
+      color: #8fd6ff;
+      font-size: 13px;
+    }
+
+    .footer {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .version-link {
+      color: #8fd6ff;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: none;
+      place-items: center;
+      padding: 20px;
+      z-index: 100;
+    }
+
+    .modal.show { display: grid; }
+
+    .modal-card {
+      width: min(760px, 100%);
+      max-height: 82vh;
+      overflow: auto;
+      background: #111a34;
+      border: 1px solid #2c3a69;
+      border-radius: 12px;
+      padding: 12px;
+    }
+
+    .modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .version-item {
+      border: 1px solid #2d3760;
+      border-radius: 10px;
+      padding: 10px;
+      margin-bottom: 8px;
+      background: #131f3d;
+    }
+
+    .version-btn {
+      border: none;
+      background: transparent;
+      color: #8fd6ff;
+      font-weight: 700;
+      text-decoration: underline;
+      cursor: pointer;
+      padding: 0;
+    }
   </style>
 </head>
 <body>
@@ -151,6 +239,10 @@
           <input id="population" type="range" min="40" max="300" step="10" value="140" />
           <span id="populationVal">140</span>
         </label>
+        <label class="slider-wrap">Speed
+          <input id="speed" type="range" min="1" max="10" step="1" value="1" />
+          <span id="speedVal">1x</span>
+        </label>
         <button id="restartBtn" type="button">Restart</button>
       </div>
     </section>
@@ -164,9 +256,35 @@
       <span><span class="dot" style="background:#6ee7ff"></span>best agent trail</span>
       <span>Orange bar is obstacle wall.</span>
     </div>
+
+    <section class="explain">
+      <h3>What you are seeing (quick guide)</h3>
+      <ul>
+        <li><b>Target:</b> the green circle. Dots are trying to evolve a movement sequence that reaches it.</li>
+        <li><b>Active dots:</b> white dots still moving this generation. Yellow reached target. Red crashed.</li>
+        <li><b>Why it “stops suddenly”:</b> each generation has a fixed number of moves (DNA length). At the end, simulation pauses briefly to score fitness, breed, and restart at step 0.</li>
+        <li><b>How they get better:</b> fitter dots are picked more often as parents, their DNA is crossed over, and mutations create new variations.</li>
+        <li><b>Best trail:</b> cyan path from the highest-fitness dot ever seen so far (across all generations).</li>
+      </ul>
+      <div id="statusText" class="status">Running generation...</div>
+    </section>
+
+    <div class="footer">Version <span id="versionLink" class="version-link">v1.1.0</span> · click to open changelog and switch version profile.</div>
   </main>
 
+  <div id="changelogModal" class="modal" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <strong>MLGA101 Version History</strong>
+        <button id="closeModalBtn" type="button">Close</button>
+      </div>
+      <div id="changelogBody"></div>
+    </div>
+  </div>
+
   <script>
+    const APP_VERSION = '1.1.0';
+
     const canvas = document.getElementById('world');
     const ctx = canvas.getContext('2d');
 
@@ -179,11 +297,18 @@
     const mutationValEl = document.getElementById('mutationVal');
     const populationSlider = document.getElementById('population');
     const populationValEl = document.getElementById('populationVal');
+    const speedSlider = document.getElementById('speed');
+    const speedValEl = document.getElementById('speedVal');
     const restartBtn = document.getElementById('restartBtn');
+    const statusTextEl = document.getElementById('statusText');
+    const versionLinkEl = document.getElementById('versionLink');
+    const changelogModalEl = document.getElementById('changelogModal');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const changelogBodyEl = document.getElementById('changelogBody');
 
-    const DNA_LENGTH = 240;
+    let DNA_LENGTH = 240;
     const GENE_FORCE = 0.50;
-    const ELITES = 3;
+    let ELITES = 3;
     const DRAG = 0.965;
 
     const start = { x: 100, y: 460 };
@@ -192,12 +317,14 @@
 
     let POP_SIZE = Number(populationSlider.value);
     let MUTATION_RATE = Number(mutationSlider.value) / 100;
+    let SIM_SPEED = Number(speedSlider.value);
 
     let generation = 1;
     let step = 0;
     let bestFitness = 0;
     let population = [];
     let bestEver = null;
+    let changelogData = null;
 
     const rand = (min, max) => min + Math.random() * (max - min);
 
@@ -231,6 +358,7 @@
       step = 0;
       stepEl.textContent = '0';
       reachedEl.textContent = '0';
+      statusTextEl.textContent = 'New generation created. Agents restart from the blue start point.';
     }
 
     function initialize() {
@@ -243,6 +371,7 @@
       bestEl.textContent = bestFitness.toFixed(4);
       stepEl.textContent = '0';
       reachedEl.textContent = '0';
+      statusTextEl.textContent = 'Running generation... white dots are actively following DNA move commands.';
     }
 
     function inWall(x, y) {
@@ -386,6 +515,18 @@
       resetPopulation(next);
     }
 
+    function runSimulationStep() {
+      for (const agent of population) updateAgent(agent);
+
+      step += 1;
+      stepEl.textContent = String(step);
+
+      if (step >= DNA_LENGTH) {
+        statusTextEl.textContent = 'Generation ended: scoring fitness, selecting parents, creating children...';
+        buildNextGeneration();
+      }
+    }
+
     function drawEnvironment() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -435,18 +576,14 @@
     }
 
     function frame() {
-      for (const agent of population) updateAgent(agent);
+      for (let i = 0; i < SIM_SPEED; i++) {
+        runSimulationStep();
+        if (step === 0) break;
+      }
 
       drawEnvironment();
       drawBestTrail();
       drawAgents();
-
-      step += 1;
-      stepEl.textContent = String(step);
-
-      if (step >= DNA_LENGTH) {
-        buildNextGeneration();
-      }
 
       requestAnimationFrame(frame);
     }
@@ -454,10 +591,71 @@
     function refreshControlLabels() {
       mutationValEl.textContent = `${mutationSlider.value}%`;
       populationValEl.textContent = populationSlider.value;
+      speedValEl.textContent = `${speedSlider.value}x`;
+    }
+
+    function applyVersionProfile(profile) {
+      if (!profile || !profile.config) return;
+      populationSlider.value = String(profile.config.population);
+      mutationSlider.value = String(profile.config.mutationPercent);
+      speedSlider.value = String(profile.config.speed);
+
+      POP_SIZE = Number(profile.config.population);
+      MUTATION_RATE = Number(profile.config.mutationPercent) / 100;
+      SIM_SPEED = Number(profile.config.speed);
+      ELITES = Number(profile.config.elites);
+      DNA_LENGTH = Number(profile.config.dnaLength);
+
+      refreshControlLabels();
+      initialize();
+      changelogModalEl.classList.remove('show');
+    }
+
+    async function loadChangelog() {
+      try {
+        const response = await fetch('MLGA101.versions.json');
+        changelogData = await response.json();
+      } catch (error) {
+        changelogBodyEl.textContent = 'Could not load version history file.';
+      }
+    }
+
+    function renderChangelog() {
+      if (!changelogData || !changelogData.versions) return;
+      changelogBodyEl.innerHTML = '';
+      for (const entry of changelogData.versions) {
+        const item = document.createElement('section');
+        item.className = 'version-item';
+
+        const title = document.createElement('button');
+        title.type = 'button';
+        title.className = 'version-btn';
+        title.textContent = `v${entry.version}`;
+        title.addEventListener('click', () => applyVersionProfile(entry));
+
+        const heading = document.createElement('div');
+        heading.append(title, document.createTextNode(` — ${entry.label}`));
+
+        const list = document.createElement('ul');
+        for (const change of entry.changes) {
+          const li = document.createElement('li');
+          li.textContent = change;
+          list.appendChild(li);
+        }
+
+        item.appendChild(heading);
+        item.appendChild(list);
+        changelogBodyEl.appendChild(item);
+      }
     }
 
     mutationSlider.addEventListener('input', () => {
       MUTATION_RATE = Number(mutationSlider.value) / 100;
+      refreshControlLabels();
+    });
+
+    speedSlider.addEventListener('input', () => {
+      SIM_SPEED = Number(speedSlider.value);
       refreshControlLabels();
     });
 
@@ -469,9 +667,27 @@
       initialize();
     });
 
+    versionLinkEl.textContent = `v${APP_VERSION}`;
+    versionLinkEl.addEventListener('click', () => {
+      renderChangelog();
+      changelogModalEl.classList.add('show');
+    });
+
+    closeModalBtn.addEventListener('click', () => {
+      changelogModalEl.classList.remove('show');
+    });
+
+    changelogModalEl.addEventListener('click', (event) => {
+      if (event.target === changelogModalEl) changelogModalEl.classList.remove('show');
+    });
+
     refreshControlLabels();
-    initialize();
-    frame();
+    loadChangelog().then(() => {
+      const latest = changelogData?.versions?.find(v => v.version === APP_VERSION);
+      if (latest) applyVersionProfile(latest);
+      else initialize();
+      frame();
+    });
   </script>
 </body>
 </html>

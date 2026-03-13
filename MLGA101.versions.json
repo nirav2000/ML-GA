@@ -1,0 +1,38 @@
+{
+  "latest": "1.1.0",
+  "versions": [
+    {
+      "version": "1.1.0",
+      "label": "Learning + speed controls",
+      "config": {
+        "population": 140,
+        "mutationPercent": 2,
+        "speed": 1,
+        "elites": 3,
+        "dnaLength": 240
+      },
+      "changes": [
+        "Added an in-page explanation panel that explains target, active dots, generation resets, and fitness scoring.",
+        "Added simulation speed control (multiple simulation steps per animation frame).",
+        "Added semantic version footer and clickable changelog modal loaded from this separate file.",
+        "Enabled switching between saved version profiles by clicking version numbers in the changelog."
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "label": "Original visual GA demo",
+      "config": {
+        "population": 140,
+        "mutationPercent": 2,
+        "speed": 1,
+        "elites": 3,
+        "dnaLength": 240
+      },
+      "changes": [
+        "Initial canvas-based GA dots simulation with target, obstacle, mutation, population control, and restart.",
+        "Implemented weighted parent selection, crossover, mutation, and elitism.",
+        "Added best-trail drawing and generation statistics chips."
+      ]
+    }
+  ]
+}
