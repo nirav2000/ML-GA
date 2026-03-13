@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MLGA101 - Genetic Algorithm Dots</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #151b2f;
+      --panel-2: #0f1528;
+      --text: #eaf0ff;
+      --muted: #b3c0e2;
+      --accent: #6ee7ff;
+      --target: #49ff84;
+      --danger: #ff6b6b;
+      --wall: #ff8f3d;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: radial-gradient(circle at top, #111936 0%, var(--bg) 55%);
+      color: var(--text);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+    }
+
+    .app {
+      width: min(980px, 100%);
+      background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+      border: 1px solid #293252;
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .chip {
+      background: #1d2540;
+      border: 1px solid #2d3760;
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 13px;
+    }
+
+    .chip b {
+      color: var(--text);
+      margin-left: 6px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: center;
+    }
+
+    button {
+      border: 1px solid #3d4a76;
+      background: #202b4d;
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    button:hover { filter: brightness(1.15); }
+
+    .slider-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--muted);
+      background: #1b2443;
+      border: 1px solid #2d3760;
+      border-radius: 10px;
+      padding: 6px 8px;
+    }
+
+    input[type="range"] {
+      width: 110px;
+    }
+
+    canvas {
+      width: 100%;
+      height: auto;
+      border: 1px solid #2f3d65;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #111831 0%, #0c1226 100%);
+      display: block;
+    }
+
+    .legend {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 4px;
+      transform: translateY(1px);
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="top">
+      <div class="stats">
+        <span class="chip">Generation <b id="gen">1</b></span>
+        <span class="chip">Step <b id="step">0</b></span>
+        <span class="chip">Best fitness <b id="best">0.0000</b></span>
+        <span class="chip">Reached target <b id="reached">0</b></span>
+      </div>
+      <div class="controls">
+        <label class="slider-wrap">Mutation
+          <input id="mutation" type="range" min="0" max="30" value="2" />
+          <span id="mutationVal">2%</span>
+        </label>
+        <label class="slider-wrap">Population
+          <input id="population" type="range" min="40" max="300" step="10" value="140" />
+          <span id="populationVal">140</span>
+        </label>
+        <button id="restartBtn" type="button">Restart</button>
+      </div>
+    </section>
+
+    <canvas id="world" width="920" height="520"></canvas>
+
+    <div class="legend">
+      <span><span class="dot" style="background:#ffffff"></span>active</span>
+      <span><span class="dot" style="background:#f7ff65"></span>reached target</span>
+      <span><span class="dot" style="background:#ff6b6b"></span>crashed</span>
+      <span><span class="dot" style="background:#6ee7ff"></span>best agent trail</span>
+      <span>Orange bar is obstacle wall.</span>
+    </div>
+  </main>
+
+  <script>
+    const canvas = document.getElementById('world');
+    const ctx = canvas.getContext('2d');
+
+    const genEl = document.getElementById('gen');
+    const stepEl = document.getElementById('step');
+    const bestEl = document.getElementById('best');
+    const reachedEl = document.getElementById('reached');
+
+    const mutationSlider = document.getElementById('mutation');
+    const mutationValEl = document.getElementById('mutationVal');
+    const populationSlider = document.getElementById('population');
+    const populationValEl = document.getElementById('populationVal');
+    const restartBtn = document.getElementById('restartBtn');
+
+    const DNA_LENGTH = 240;
+    const GENE_FORCE = 0.50;
+    const ELITES = 3;
+    const DRAG = 0.965;
+
+    const start = { x: 100, y: 460 };
+    const target = { x: 810, y: 90, r: 18 };
+    const wall = { x: 260, y: 260, w: 420, h: 18 };
+
+    let POP_SIZE = Number(populationSlider.value);
+    let MUTATION_RATE = Number(mutationSlider.value) / 100;
+
+    let generation = 1;
+    let step = 0;
+    let bestFitness = 0;
+    let population = [];
+    let bestEver = null;
+
+    const rand = (min, max) => min + Math.random() * (max - min);
+
+    function randomGene() {
+      const angle = rand(0, Math.PI * 2);
+      const mag = rand(0.2, 1) * GENE_FORCE;
+      return { x: Math.cos(angle) * mag, y: Math.sin(angle) * mag };
+    }
+
+    function randomDNA() {
+      return Array.from({ length: DNA_LENGTH }, randomGene);
+    }
+
+    function createAgent(dna = randomDNA()) {
+      return {
+        x: start.x,
+        y: start.y,
+        vx: 0,
+        vy: 0,
+        dna,
+        reached: false,
+        crashed: false,
+        reachStep: Infinity,
+        fitness: 0,
+        trail: [{ x: start.x, y: start.y }]
+      };
+    }
+
+    function resetPopulation(nextPopulation) {
+      population = nextPopulation;
+      step = 0;
+      stepEl.textContent = '0';
+      reachedEl.textContent = '0';
+    }
+
+    function initialize() {
+      population = Array.from({ length: POP_SIZE }, () => createAgent());
+      generation = 1;
+      step = 0;
+      bestFitness = 0;
+      bestEver = null;
+      genEl.textContent = String(generation);
+      bestEl.textContent = bestFitness.toFixed(4);
+      stepEl.textContent = '0';
+      reachedEl.textContent = '0';
+    }
+
+    function inWall(x, y) {
+      return x >= wall.x && x <= wall.x + wall.w && y >= wall.y && y <= wall.y + wall.h;
+    }
+
+    function updateAgent(agent) {
+      if (agent.reached || agent.crashed) return;
+
+      const gene = agent.dna[step];
+      if (!gene) return;
+
+      agent.vx += gene.x;
+      agent.vy += gene.y;
+
+      agent.vx *= DRAG;
+      agent.vy *= DRAG;
+
+      agent.x += agent.vx;
+      agent.y += agent.vy;
+
+      if (agent.trail.length < 90) {
+        agent.trail.push({ x: agent.x, y: agent.y });
+      } else if (step % 3 === 0) {
+        agent.trail.shift();
+        agent.trail.push({ x: agent.x, y: agent.y });
+      }
+
+      const dx = agent.x - target.x;
+      const dy = agent.y - target.y;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist <= target.r) {
+        agent.reached = true;
+        agent.reachStep = step;
+        agent.x = target.x;
+        agent.y = target.y;
+        return;
+      }
+
+      if (
+        agent.x < 0 || agent.x > canvas.width ||
+        agent.y < 0 || agent.y > canvas.height ||
+        inWall(agent.x, agent.y)
+      ) {
+        agent.crashed = true;
+      }
+    }
+
+    function fitnessOf(agent) {
+      const d = Math.hypot(agent.x - target.x, agent.y - target.y);
+      let score = 1 / (d + 1);
+
+      if (agent.reached) {
+        score += 12 + (DNA_LENGTH - agent.reachStep) * 0.05;
+      }
+
+      if (agent.crashed) {
+        score *= 0.25;
+      }
+
+      return score;
+    }
+
+    function evaluatePopulation() {
+      let reachedCount = 0;
+      let localBest = population[0];
+      let totalFitness = 0;
+
+      for (const agent of population) {
+        agent.fitness = fitnessOf(agent);
+        totalFitness += agent.fitness;
+
+        if (agent.reached) reachedCount += 1;
+        if (agent.fitness > localBest.fitness) localBest = agent;
+      }
+
+      bestFitness = localBest.fitness;
+      bestEl.textContent = bestFitness.toFixed(4);
+      reachedEl.textContent = String(reachedCount);
+
+      if (!bestEver || localBest.fitness > bestEver.fitness) {
+        bestEver = {
+          fitness: localBest.fitness,
+          trail: [...localBest.trail]
+        };
+      }
+
+      population.sort((a, b) => b.fitness - a.fitness);
+      return totalFitness;
+    }
+
+    function selectParent(totalFitness) {
+      let r = Math.random() * totalFitness;
+      for (const agent of population) {
+        r -= agent.fitness;
+        if (r <= 0) return agent;
+      }
+      return population[population.length - 1];
+    }
+
+    function crossover(dnaA, dnaB) {
+      const cut = Math.floor(rand(0, DNA_LENGTH));
+      const child = new Array(DNA_LENGTH);
+
+      for (let i = 0; i < DNA_LENGTH; i++) {
+        const g = i < cut ? dnaA[i] : dnaB[i];
+        child[i] = { x: g.x, y: g.y };
+      }
+
+      return child;
+    }
+
+    function mutate(dna) {
+      for (let i = 0; i < dna.length; i++) {
+        if (Math.random() < MUTATION_RATE) {
+          dna[i] = randomGene();
+        }
+      }
+      return dna;
+    }
+
+    function buildNextGeneration() {
+      const totalFitness = evaluatePopulation();
+      const next = [];
+
+      for (let i = 0; i < Math.min(ELITES, population.length); i++) {
+        const eliteDNA = population[i].dna.map(g => ({ x: g.x, y: g.y }));
+        next.push(createAgent(eliteDNA));
+      }
+
+      while (next.length < POP_SIZE) {
+        const p1 = selectParent(totalFitness);
+        const p2 = selectParent(totalFitness);
+        const childDNA = mutate(crossover(p1.dna, p2.dna));
+        next.push(createAgent(childDNA));
+      }
+
+      generation += 1;
+      genEl.textContent = String(generation);
+      resetPopulation(next);
+    }
+
+    function drawEnvironment() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = 'rgba(73, 255, 132, 0.16)';
+      ctx.beginPath();
+      ctx.arc(target.x, target.y, target.r + 10, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#49ff84';
+      ctx.beginPath();
+      ctx.arc(target.x, target.y, target.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#ff8f3d';
+      ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
+
+      ctx.fillStyle = '#7ab7ff';
+      ctx.beginPath();
+      ctx.arc(start.x, start.y, 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawBestTrail() {
+      if (!bestEver || bestEver.trail.length < 2) return;
+
+      ctx.beginPath();
+      ctx.moveTo(bestEver.trail[0].x, bestEver.trail[0].y);
+      for (let i = 1; i < bestEver.trail.length; i++) {
+        ctx.lineTo(bestEver.trail[i].x, bestEver.trail[i].y);
+      }
+      ctx.strokeStyle = 'rgba(110, 231, 255, 0.75)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    function drawAgents() {
+      for (const agent of population) {
+        ctx.beginPath();
+        ctx.arc(agent.x, agent.y, 2.6, 0, Math.PI * 2);
+
+        if (agent.reached) ctx.fillStyle = '#f7ff65';
+        else if (agent.crashed) ctx.fillStyle = '#ff6b6b';
+        else ctx.fillStyle = '#ffffff';
+
+        ctx.fill();
+      }
+    }
+
+    function frame() {
+      for (const agent of population) updateAgent(agent);
+
+      drawEnvironment();
+      drawBestTrail();
+      drawAgents();
+
+      step += 1;
+      stepEl.textContent = String(step);
+
+      if (step >= DNA_LENGTH) {
+        buildNextGeneration();
+      }
+
+      requestAnimationFrame(frame);
+    }
+
+    function refreshControlLabels() {
+      mutationValEl.textContent = `${mutationSlider.value}%`;
+      populationValEl.textContent = populationSlider.value;
+    }
+
+    mutationSlider.addEventListener('input', () => {
+      MUTATION_RATE = Number(mutationSlider.value) / 100;
+      refreshControlLabels();
+    });
+
+    populationSlider.addEventListener('input', refreshControlLabels);
+
+    restartBtn.addEventListener('click', () => {
+      POP_SIZE = Number(populationSlider.value);
+      MUTATION_RATE = Number(mutationSlider.value) / 100;
+      initialize();
+    });
+
+    refreshControlLabels();
+    initialize();
+    frame();
+  </script>
+</body>
+</html>
