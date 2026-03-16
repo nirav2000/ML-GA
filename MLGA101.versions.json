@@ -1,6 +1,23 @@
 {
-  "latest": "1.3.0",
+  "latest": "1.3.1",
   "versions": [
+    {
+      "version": "1.3.1",
+      "label": "Accurate archive snapshots from git history",
+      "appFile": "MLGA101.html",
+      "config": {
+        "population": 140,
+        "mutationPercent": 2,
+        "speed": 1,
+        "elites": 3,
+        "dnaLength": 240
+      },
+      "changes": [
+        "Rebuilt archived app files (1.0.0, 1.1.0, 1.2.0) from their original git commits so each archive reflects that release accurately.",
+        "Kept version navigation architecture intact: changelog JSON stays current while older app files remain selectable.",
+        "Bumped live app version to 1.3.1."
+      ]
+    },
     {
       "version": "1.3.0",
       "label": "Version archive navigation + cache-busting changelog",

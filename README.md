@@ -35,7 +35,7 @@ The cyan **best trail** is the highest-fitness agent trail seen across all gener
 
 ## Versioning
 - Archived app files live in `versions/<version>/MLGA101.html`.
-- Current app version: `v1.3.0`.
+- Current app version: `v1.3.1`.
 - Click the version in the footer to open the changelog modal.
 - Clicking a version loads that archived app file so you can move backward or forward between versions.
 

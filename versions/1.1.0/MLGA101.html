@@ -3,9 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
   <title>MLGA101 - Genetic Algorithm Dots</title>
   <style>
     :root {
@@ -69,15 +66,7 @@
     .chip b {
       color: var(--text);
       margin-left: 6px;
-      display: inline-block;
-      min-width: 4ch;
-      text-align: right;
       font-variant-numeric: tabular-nums;
-    }
-
-    .version-item.active {
-      border-color: #6ee7ff;
-      box-shadow: 0 0 0 1px rgba(110, 231, 255, 0.35);
     }
 
     .controls {
@@ -280,7 +269,7 @@
       <div id="statusText" class="status">Running generation...</div>
     </section>
 
-    <div class="footer">Version <span id="versionLink" class="version-link">v1.1.0</span> · click to open changelog and load a specific archived version.</div>
+    <div class="footer">Version <span id="versionLink" class="version-link">v1.1.0</span> · click to open changelog and switch version profile.</div>
   </main>
 
   <div id="changelogModal" class="modal" aria-hidden="true">
@@ -332,35 +321,10 @@
 
     let generation = 1;
     let step = 0;
-    let reachedThisGeneration = 0;
     let bestFitness = 0;
     let population = [];
     let bestEver = null;
     let changelogData = null;
-    let activeVersion = APP_VERSION;
-
-    function getRootPathPrefix() {
-      const marker = '/versions/';
-      const path = window.location.pathname;
-      if (path.includes(marker)) return path.slice(0, path.indexOf(marker) + 1);
-      return path.slice(0, path.lastIndexOf('/') + 1);
-    }
-
-    function getRootUrl() {
-      return `${window.location.origin}${getRootPathPrefix()}`;
-    }
-
-    function withBust(url) {
-      const sep = url.includes('?') ? '&' : '?';
-      return `${url}${sep}ts=${Date.now()}`;
-    }
-
-    function getCurrentAppFile() {
-      const prefix = getRootPathPrefix();
-      return window.location.pathname.startsWith(prefix)
-        ? window.location.pathname.slice(prefix.length)
-        : window.location.pathname.replace(/^\//, '');
-    }
 
     const rand = (min, max) => min + Math.random() * (max - min);
 
@@ -392,7 +356,6 @@
     function resetPopulation(nextPopulation) {
       population = nextPopulation;
       step = 0;
-      reachedThisGeneration = 0;
       stepEl.textContent = '0';
       reachedEl.textContent = '0';
       statusTextEl.textContent = 'New generation created. Agents restart from the blue start point.';
@@ -402,7 +365,6 @@
       population = Array.from({ length: POP_SIZE }, () => createAgent());
       generation = 1;
       step = 0;
-      reachedThisGeneration = 0;
       bestFitness = 0;
       bestEver = null;
       genEl.textContent = String(generation);
@@ -447,7 +409,6 @@
         agent.reachStep = step;
         agent.x = target.x;
         agent.y = target.y;
-        reachedThisGeneration += 1;
         return;
       }
 
@@ -476,6 +437,7 @@
     }
 
     function evaluatePopulation() {
+      let reachedCount = 0;
       let localBest = population[0];
       let totalFitness = 0;
 
@@ -483,12 +445,13 @@
         agent.fitness = fitnessOf(agent);
         totalFitness += agent.fitness;
 
+        if (agent.reached) reachedCount += 1;
         if (agent.fitness > localBest.fitness) localBest = agent;
       }
 
       bestFitness = localBest.fitness;
       bestEl.textContent = bestFitness.toFixed(4);
-      reachedEl.textContent = String(reachedThisGeneration);
+      reachedEl.textContent = String(reachedCount);
 
       if (!bestEver || localBest.fitness > bestEver.fitness) {
         bestEver = {
@@ -557,7 +520,6 @@
 
       step += 1;
       stepEl.textContent = String(step);
-      reachedEl.textContent = String(reachedThisGeneration);
 
       if (step >= DNA_LENGTH) {
         statusTextEl.textContent = 'Generation ended: scoring fitness, selecting parents, creating children...';
@@ -633,19 +595,7 @@
     }
 
     function applyVersionProfile(profile) {
-      if (!profile) return;
-
-      if (profile.appFile) {
-        const target = profile.appFile.replace(/^\//, '');
-        const current = getCurrentAppFile().replace(/^\//, '');
-        if (target !== current) {
-          const nextUrl = withBust(`${getRootUrl()}${target}`);
-          window.location.href = nextUrl;
-          return;
-        }
-      }
-
-      if (!profile.config) return;
+      if (!profile || !profile.config) return;
       populationSlider.value = String(profile.config.population);
       mutationSlider.value = String(profile.config.mutationPercent);
       speedSlider.value = String(profile.config.speed);
@@ -655,23 +605,16 @@
       SIM_SPEED = Number(profile.config.speed);
       ELITES = Number(profile.config.elites);
       DNA_LENGTH = Number(profile.config.dnaLength);
-      activeVersion = profile.version;
-      versionLinkEl.textContent = `v${activeVersion}`;
 
       refreshControlLabels();
       initialize();
-      renderChangelog();
+      changelogModalEl.classList.remove('show');
     }
 
     async function loadChangelog() {
       try {
-        const response = await fetch(withBust(`${getRootUrl()}MLGA101.versions.json`), { cache: 'no-store' });
+        const response = await fetch('MLGA101.versions.json');
         changelogData = await response.json();
-        const active = changelogData?.versions?.find(v => v.version === APP_VERSION);
-        if (active) {
-          activeVersion = active.version;
-          versionLinkEl.textContent = `v${active.version}`;
-        }
       } catch (error) {
         changelogBodyEl.textContent = 'Could not load version history file.';
       }
@@ -683,7 +626,6 @@
       for (const entry of changelogData.versions) {
         const item = document.createElement('section');
         item.className = 'version-item';
-        if (entry.version === activeVersion) item.classList.add('active');
 
         const title = document.createElement('button');
         title.type = 'button';

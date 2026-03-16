@@ -3,9 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
   <title>MLGA101 - Genetic Algorithm Dots</title>
   <style>
     :root {
@@ -280,7 +277,7 @@
       <div id="statusText" class="status">Running generation...</div>
     </section>
 
-    <div class="footer">Version <span id="versionLink" class="version-link">v1.2.0</span> · click to open changelog and load a specific archived version.</div>
+    <div class="footer">Version <span id="versionLink" class="version-link">v1.2.0</span> · click to open changelog and switch version profile.</div>
   </main>
 
   <div id="changelogModal" class="modal" aria-hidden="true">
@@ -338,29 +335,6 @@
     let bestEver = null;
     let changelogData = null;
     let activeVersion = APP_VERSION;
-
-    function getRootPathPrefix() {
-      const marker = '/versions/';
-      const path = window.location.pathname;
-      if (path.includes(marker)) return path.slice(0, path.indexOf(marker) + 1);
-      return path.slice(0, path.lastIndexOf('/') + 1);
-    }
-
-    function getRootUrl() {
-      return `${window.location.origin}${getRootPathPrefix()}`;
-    }
-
-    function withBust(url) {
-      const sep = url.includes('?') ? '&' : '?';
-      return `${url}${sep}ts=${Date.now()}`;
-    }
-
-    function getCurrentAppFile() {
-      const prefix = getRootPathPrefix();
-      return window.location.pathname.startsWith(prefix)
-        ? window.location.pathname.slice(prefix.length)
-        : window.location.pathname.replace(/^\//, '');
-    }
 
     const rand = (min, max) => min + Math.random() * (max - min);
 
@@ -633,19 +607,7 @@
     }
 
     function applyVersionProfile(profile) {
-      if (!profile) return;
-
-      if (profile.appFile) {
-        const target = profile.appFile.replace(/^\//, '');
-        const current = getCurrentAppFile().replace(/^\//, '');
-        if (target !== current) {
-          const nextUrl = withBust(`${getRootUrl()}${target}`);
-          window.location.href = nextUrl;
-          return;
-        }
-      }
-
-      if (!profile.config) return;
+      if (!profile || !profile.config) return;
       populationSlider.value = String(profile.config.population);
       mutationSlider.value = String(profile.config.mutationPercent);
       speedSlider.value = String(profile.config.speed);
@@ -665,13 +627,8 @@
 
     async function loadChangelog() {
       try {
-        const response = await fetch(withBust(`${getRootUrl()}MLGA101.versions.json`), { cache: 'no-store' });
+        const response = await fetch('MLGA101.versions.json');
         changelogData = await response.json();
-        const active = changelogData?.versions?.find(v => v.version === APP_VERSION);
-        if (active) {
-          activeVersion = active.version;
-          versionLinkEl.textContent = `v${active.version}`;
-        }
       } catch (error) {
         changelogBodyEl.textContent = 'Could not load version history file.';
       }
