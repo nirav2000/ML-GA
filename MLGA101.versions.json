@@ -1,6 +1,22 @@
 {
-  "latest": "1.1.0",
+  "latest": "1.2.0",
   "versions": [
+    {
+      "version": "1.2.0",
+      "label": "Version switching polish + smoother HUD",
+      "config": {
+        "population": 140,
+        "mutationPercent": 2,
+        "speed": 1,
+        "elites": 3,
+        "dnaLength": 240
+      },
+      "changes": [
+        "Kept the changelog modal open when switching versions and highlighted the currently active version so past/future versions stay visible.",
+        "Fixed stat-chip number jitter by reserving numeric width to stop Step/Generation text from jumping at high speeds.",
+        "Made 'Reached target' update live during each generation so successful agents are visible immediately instead of only at generation rollover."
+      ]
+    },
     {
       "version": "1.1.0",
       "label": "Learning + speed controls",
