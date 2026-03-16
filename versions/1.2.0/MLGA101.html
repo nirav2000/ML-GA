@@ -334,6 +334,29 @@
     let population = [];
     let bestEver = null;
     let changelogData = null;
+
+    function getRootPathPrefix() {
+      const marker = '/versions/';
+      const path = window.location.pathname;
+      if (path.includes(marker)) return path.slice(0, path.indexOf(marker) + 1);
+      return path.slice(0, path.lastIndexOf('/') + 1);
+    }
+
+    function getRootUrl() {
+      return `${window.location.origin}${getRootPathPrefix()}`;
+    }
+
+    function withBust(url) {
+      const sep = url.includes('?') ? '&' : '?';
+      return `${url}${sep}ts=${Date.now()}`;
+    }
+
+    function getCurrentAppFile() {
+      const prefix = getRootPathPrefix();
+      return window.location.pathname.startsWith(prefix)
+        ? window.location.pathname.slice(prefix.length)
+        : window.location.pathname.replace(/^\//, '');
+    }
     let activeVersion = APP_VERSION;
 
     const rand = (min, max) => min + Math.random() * (max - min);
@@ -607,7 +630,18 @@
     }
 
     function applyVersionProfile(profile) {
-      if (!profile || !profile.config) return;
+      if (!profile) return;
+
+      if (profile.appFile) {
+        const target = profile.appFile.replace(/^\//, '');
+        const current = getCurrentAppFile().replace(/^\//, '');
+        if (target !== current) {
+          window.location.href = withBust(`${getRootUrl()}${target}`);
+          return;
+        }
+      }
+
+      if (!profile.config) return;
       populationSlider.value = String(profile.config.population);
       mutationSlider.value = String(profile.config.mutationPercent);
       speedSlider.value = String(profile.config.speed);
@@ -627,7 +661,7 @@
 
     async function loadChangelog() {
       try {
-        const response = await fetch('MLGA101.versions.json');
+        const response = await fetch(withBust(`${getRootUrl()}MLGA101.versions.json`), { cache: 'no-store' });
         changelogData = await response.json();
       } catch (error) {
         changelogBodyEl.textContent = 'Could not load version history file.';

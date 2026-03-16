@@ -131,6 +131,66 @@
       margin-right: 4px;
       transform: translateY(1px);
     }
+
+    .footer {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .version-link {
+      color: #8fd6ff;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: none;
+      place-items: center;
+      padding: 20px;
+      z-index: 100;
+    }
+
+    .modal.show { display: grid; }
+
+    .modal-card {
+      width: min(760px, 100%);
+      max-height: 82vh;
+      overflow: auto;
+      background: #111a34;
+      border: 1px solid #2c3a69;
+      border-radius: 12px;
+      padding: 12px;
+    }
+
+    .modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .version-item {
+      border: 1px solid #2d3760;
+      border-radius: 10px;
+      padding: 10px;
+      margin-bottom: 8px;
+      background: #131f3d;
+    }
+
+    .version-btn {
+      border: none;
+      background: transparent;
+      color: #8fd6ff;
+      font-weight: 700;
+      text-decoration: underline;
+      cursor: pointer;
+      padding: 0;
+    }
   </style>
 </head>
 <body>
@@ -164,9 +224,23 @@
       <span><span class="dot" style="background:#6ee7ff"></span>best agent trail</span>
       <span>Orange bar is obstacle wall.</span>
     </div>
+
+    <div class="footer">Version <span id="versionLink" class="version-link">v1.0.0</span> · click to open changelog and load a specific archived version.</div>
   </main>
 
+  <div id="changelogModal" class="modal" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <strong>MLGA101 Version History</strong>
+        <button id="closeModalBtn" type="button">Close</button>
+      </div>
+      <div id="changelogBody"></div>
+    </div>
+  </div>
+
   <script>
+    const APP_VERSION = '1.0.0';
+
     const canvas = document.getElementById('world');
     const ctx = canvas.getContext('2d');
 
@@ -180,6 +254,10 @@
     const populationSlider = document.getElementById('population');
     const populationValEl = document.getElementById('populationVal');
     const restartBtn = document.getElementById('restartBtn');
+    const versionLinkEl = document.getElementById('versionLink');
+    const changelogModalEl = document.getElementById('changelogModal');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const changelogBodyEl = document.getElementById('changelogBody');
 
     const DNA_LENGTH = 240;
     const GENE_FORCE = 0.50;
@@ -198,6 +276,77 @@
     let bestFitness = 0;
     let population = [];
     let bestEver = null;
+    let changelogData = null;
+
+    function getRootPathPrefix() {
+      const marker = '/versions/';
+      const path = window.location.pathname;
+      if (path.includes(marker)) return path.slice(0, path.indexOf(marker) + 1);
+      return path.slice(0, path.lastIndexOf('/') + 1);
+    }
+
+    function getRootUrl() {
+      return `${window.location.origin}${getRootPathPrefix()}`;
+    }
+
+    function withBust(url) {
+      const sep = url.includes('?') ? '&' : '?';
+      return `${url}${sep}ts=${Date.now()}`;
+    }
+
+    function getCurrentAppFile() {
+      const prefix = getRootPathPrefix();
+      return window.location.pathname.startsWith(prefix)
+        ? window.location.pathname.slice(prefix.length)
+        : window.location.pathname.replace(/^\//, '');
+    }
+
+    function applyVersionProfile(profile) {
+      if (!profile || !profile.appFile) return;
+      const target = profile.appFile.replace(/^\//, '');
+      const current = getCurrentAppFile().replace(/^\//, '');
+      if (target !== current) {
+        window.location.href = withBust(`${getRootUrl()}${target}`);
+      }
+    }
+
+    async function loadChangelog() {
+      try {
+        const response = await fetch(withBust(`${getRootUrl()}MLGA101.versions.json`), { cache: 'no-store' });
+        changelogData = await response.json();
+      } catch (error) {
+        changelogBodyEl.textContent = 'Could not load version history file.';
+      }
+    }
+
+    function renderChangelog() {
+      if (!changelogData || !changelogData.versions) return;
+      changelogBodyEl.innerHTML = '';
+      for (const entry of changelogData.versions) {
+        const item = document.createElement('section');
+        item.className = 'version-item';
+
+        const title = document.createElement('button');
+        title.type = 'button';
+        title.className = 'version-btn';
+        title.textContent = `v${entry.version}`;
+        title.addEventListener('click', () => applyVersionProfile(entry));
+
+        const heading = document.createElement('div');
+        heading.append(title, document.createTextNode(` — ${entry.label}`));
+
+        const list = document.createElement('ul');
+        for (const change of entry.changes || []) {
+          const li = document.createElement('li');
+          li.textContent = change;
+          list.appendChild(li);
+        }
+
+        item.appendChild(heading);
+        item.appendChild(list);
+        changelogBodyEl.appendChild(item);
+      }
+    }
 
     const rand = (min, max) => min + Math.random() * (max - min);
 
@@ -469,9 +618,25 @@
       initialize();
     });
 
+    versionLinkEl.textContent = `v${APP_VERSION}`;
+    versionLinkEl.addEventListener('click', () => {
+      renderChangelog();
+      changelogModalEl.classList.add('show');
+    });
+
+    closeModalBtn.addEventListener('click', () => {
+      changelogModalEl.classList.remove('show');
+    });
+
+    changelogModalEl.addEventListener('click', (event) => {
+      if (event.target === changelogModalEl) changelogModalEl.classList.remove('show');
+    });
+
     refreshControlLabels();
     initialize();
-    frame();
+    loadChangelog().then(() => {
+      frame();
+    });
   </script>
 </body>
 </html>
